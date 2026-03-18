@@ -14,7 +14,7 @@ st.set_page_config(page_title="Đa Phương Tiện", layout="wide")
 st.title(" Hệ thống AI Đa Phương Tiện")
 
 # --- CẤU HÌNH HỆ THỐNG ---
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO_NAME = "Dra-Dra04/DaPhuongTien"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -30,7 +30,6 @@ def translate_text(text, target_lang='en'):
 # --- TẢI MÔ HÌNH TỐI ƯU ---
 @st.cache_resource
 def load_models():
-    st.info("🚀 Đang khởi động AI")
 
     # 1. Sinh ảnh siêu tốc (SD-Turbo)
     pipe = AutoPipelineForText2Image.from_pretrained(
@@ -71,7 +70,7 @@ def upload_to_github(image_bytes):
 # --- GIAO DIỆN ---
 txt2img_pipe, caption_processor, caption_model, upscale_processor, upscale_model = load_models()
 
-tab1, tab2, tab3 = st.tabs(["✨ Sinh ảnh", "🔍 Mô tả ảnh", "🎨 Khử nhiễu & Làm nét"])
+tab1, tab2 = st.tabs(["✨ Sinh ảnh", "🔍 Mô tả ảnh"])
 
 # --- TAB 1: SINH ẢNH SIÊU TỐC ---
 with tab1:
@@ -108,52 +107,5 @@ with tab2:
             out = caption_model.generate(**inputs)
             st.write(
                 f"🇻🇳 **Kết quả:** {translate_text(caption_processor.decode(out[0], skip_special_tokens=True), 'vi')}")
-
-# --- TAB 3: KHỬ NHIỄU & LÀM NÉT ---
-with tab3:
-    st.subheader(" Nâng cấp chất lượng hình ảnh bằng AI (Swin2SR Siêu Nhẹ)")
-    up_noise = st.file_uploader("Tải ảnh cần làm nét...", type=["jpg", "png"], key="tab3")
-
-    if up_noise:
-        img_noise = Image.open(up_noise).convert('RGB')
-        max_size = 512
-        img_noise.thumbnail((max_size, max_size))
-
-        w, h = img_noise.size
-
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.image(img_noise, caption=f"Ảnh đầu vào ({w}x{h})", width=400)
-
-        if st.button("Bắt đầu xử lý làm nét"):
-            with st.spinner("AI đang tăng độ phân giải (chỉ mất vài giây)..."):
-                # --- Sử dụng logic của Swin2SR thay vì Stable Diffusion ---
-                inputs = upscale_processor(img_noise, return_tensors="pt").to(DEVICE)
-
-                # Vô hiệu hóa gradient để tránh tràn RAM
-                with torch.no_grad():
-                    outputs = upscale_model(**inputs)
-
-                # Dịch ngược kết quả AI thành ảnh
-                output_tensor = outputs.reconstruction.data.squeeze().float().cpu().clamp_(0, 1).numpy()
-                output_array = (np.moveaxis(output_tensor, 0, -1) * 255.0).round().astype(np.uint8)
-                final_img = Image.fromarray(output_array)
-                # ----------------------------------------------------------------------
-
-                if DEVICE == "cuda":
-                    torch.cuda.empty_cache()
-
-                with col_b:
-                    wf, hf = final_img.size
-                    st.image(final_img, caption=f"Ảnh AI Enhanced ({wf}x{hf})", width=400)
-
-                    buf_dn = io.BytesIO()
-                    final_img.save(buf_dn, format="PNG")
-                    st.download_button(
-                        label="📥 Tải ảnh chất lượng cao",
-                        data=buf_dn.getvalue(),
-                        file_name="ai_upscaled_fast.png",
-                        mime="image/png"
-                    )
 
 st.divider()
